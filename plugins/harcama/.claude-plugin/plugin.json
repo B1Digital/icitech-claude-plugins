@@ -1,0 +1,1 @@
+{ "name": "harcama", "version": "0.1.0", "author": { "name": "icitech team" }, "description": "Claude harcamasını sağ panelde gösterir: 5 saatlik blok, ay özeti ve takvim; /harcama aç-kapa", "types": "./types/index.d.ts" }

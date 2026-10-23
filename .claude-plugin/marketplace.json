@@ -1,0 +1,12 @@
+{
+  "name": "icitech",
+  "owner": { "name": "icitech team" },
+  "description": "icitech team'in Claude Code eklentileri",
+  "plugins": [
+    {
+      "name": "harcama",
+      "source": "./plugins/harcama",
+      "description": "Claude harcamasını sağ panelde gösterir: limitler, ay takvimi, 5 saatlik blok; /harcama aç-kapa"
+    }
+  ]
+}
