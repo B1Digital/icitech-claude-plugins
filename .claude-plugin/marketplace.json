@@ -1,12 +1,19 @@
 {
   "name": "icitech",
-  "owner": { "name": "icitech team" },
+  "owner": {
+    "name": "icitech team"
+  },
   "description": "icitech team'in Claude Code eklentileri",
   "plugins": [
     {
       "name": "harcama",
       "source": "./plugins/harcama",
       "description": "Claude harcamasını sağ panelde gösterir: limitler, ay takvimi, 5 saatlik blok; /harcama aç-kapa"
+    },
+    {
+      "name": "ajanlar",
+      "source": "./plugins/ajanlar",
+      "description": "Çalışan alt ajanları sağ panelde canlı gösterir: rol rozeti, görev, süre, araç şeridi, sonuç; /ajanlar aç-kapa"
     }
   ]
 }
