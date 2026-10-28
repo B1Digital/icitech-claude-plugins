@@ -10,6 +10,15 @@ Panelde üç bölüm var:
 
 Panel açıkken dakikada bir yenilenir; kapalıyken hiçbir şey çalıştırmaz.
 
+## Bütçe uyarıları (0.2.0)
+
+- **Durum satırı:** `oturum $12.40 · opus`, yani bu oturumun maliyeti ve modeli. Panel kapalıyken de görünür.
+- **Oturum bütçesi:** maliyet her $15 katını geçince bir kez uyarı verir ($15, $30, …): iş bittiyse `/clear` ile yeni oturum daha ucuz.
+- **Model uyarısı:** Opus açıkken oturum $10'u geçince bir kez hatırlatır: deploy, issue, git gibi rutin işte `/model sonnet` yeter.
+- **Günlük hedef:** panelde "Bugün" satırı $40'ı geçince kırmızı olur.
+
+Eşikleri `/config` → harcama altından değiştirebilirsin (`session_budget`, `opus_hint_at`, `daily_target`). `/clear` sayaçları sıfırlar.
+
 ## Gereksinim
 
 Bilgisayarda **Node.js** kurulu olmalı. Veriler [ccusage](https://github.com/ryoppippi/ccusage) ile kendi makinendeki Claude Code kayıtlarından okunur; dışarı bir şey gönderilmez. ccusage kurulu değilse ilk açılışta `npx` ile indirilir (birkaç saniye sürebilir).

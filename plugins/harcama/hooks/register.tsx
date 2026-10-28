@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, RenderChildren } from 'claude-code'
 
-import type { Block, Day, Month, Snapshot } from '../types'
+import type { Block, Day, Month, Snapshot, Watch } from '../types'
 
 const PANE = 'usage'
 const TITLE = 'Harcama'
@@ -9,6 +9,31 @@ const TITLE = 'Harcama'
 const snapshot = atom({ plugin: 'harcama', key: 'snapshot' } as const, null, {
   shape: 'snapshot-5',
 })
+
+const watch = atom({ plugin: 'harcama', key: 'watch' } as const, null, { shape: 'watch-1' })
+
+const num = (v: unknown, fallback: number) => (typeof v === 'number' && v > 0 ? v : fallback)
+const shortModel = (id: string) => id.match(/opus|sonnet|haiku|fable/)?.[0] ?? id
+
+// Bütçe katı ve Opus uyarısı oturum başına bir kez; /clear startedAt'i değiştirir, sayaçlar sıfırlanır.
+const observe = async ($: EngineInterface, usd: number, model: string | null, opts: { budget: number; opusAt: number }) => {
+  const { startedAt } = await $.session.usage()
+  const prev = await read($, watch)
+  const w: Watch = prev && prev.startedAt === startedAt
+    ? { ...prev, usd, model: model ?? prev.model }
+    : { startedAt, usd, model: model ?? prev?.model ?? '', budgetStep: 0, opusHinted: false }
+  const step = Math.floor(usd / opts.budget)
+  if (step > w.budgetStep) {
+    w.budgetStep = step
+    $.ui.toast(`Bu oturum $${(step * opts.budget).toFixed(0)}'i geçti ($${usd.toFixed(2)}). İş bittiyse /clear ile yeni oturum daha ucuz.`)
+  }
+  if (!w.opusHinted && /opus/.test(w.model) && usd >= opts.opusAt) {
+    w.opusHinted = true
+    $.ui.toast(`Opus açık, oturum $${usd.toFixed(2)}. Deploy, issue, git gibi rutin işte /model sonnet yeter.`)
+  }
+  await update($, watch, () => w)
+  $.ui.status(`oturum $${usd.toFixed(2)}${w.model ? ' · ' + shortModel(w.model) : ''}`)
+}
 
 const isOpen = async ($: EngineInterface) =>
   (await $.ui.panes()).some(pane => pane.id === PANE)
@@ -128,7 +153,21 @@ const barParts = (pct: number, width = 20) => {
   return ['━'.repeat(full), '─'.repeat(width - full)]
 }
 
-export const register: Register = on => {
+export const register: Register = (on, options) => {
+  const opts = { budget: num(options.session_budget, 15), opusAt: num(options.opus_hint_at, 10) }
+  const dailyTarget = num(options.daily_target, 40)
+  let lastModel: string | null = null
+
+  on('turn.complete', async ($, e, next) => {
+    if (e.usage?.model) lastModel = e.usage.model
+    return next(e)
+  })
+
+  on('session.measure', async ($, e, next) => {
+    if (e.cost && e.changed.includes('cost')) await observe($, e.cost.usd, lastModel, opts)
+    return next(e)
+  })
+
   on('session.start', async ($, e, next) => {
     await $.command.register({
       name: 'harcama',
@@ -175,7 +214,8 @@ export const register: Register = on => {
     const pace = b ? rateColor(b.costPerHour) : 'text'
     const avg = m ? m.totalCost / Math.max(1, m.activeDays) : 0
     const dayColor = (cost: number) => (cost <= avg ? 'success' : cost <= avg * 1.5 ? 'warning' : 'error')
-    const todayColor = m ? dayColor(m.todayCost) : 'success'
+    const todayColor = !m ? 'success' : m.todayCost > dailyTarget ? 'error' : dayColor(m.todayCost)
+    const w = await read($, watch)
 
     // Month calendar: Monday-first rows, null pads the days before the 1st.
     const costs = new Map(snap.calendar.map(d => [Number(d.date.slice(8, 10)), d.cost]))
@@ -240,8 +280,9 @@ export const register: Register = on => {
         ])}
         <Text> </Text>
         <Text bold color="claude">Bu ay</Text>
+        {w && <Text>{label('Oturum')}<Text bold color={w.usd >= opts.budget ? 'warning' : 'suggestion'}>${w.usd.toFixed(2)}</Text>{w.model ? <Text dimColor> · {shortModel(w.model)}</Text> : null}</Text>}
         {!m && <Text dimColor>Veri yok.</Text>}
-        {m && <Text>{label('Bugün')}<Text bold color={todayColor}>${m.todayCost.toFixed(2)}</Text></Text>}
+        {m && <Text>{label('Bugün')}<Text bold color={todayColor}>${m.todayCost.toFixed(2)}</Text> <Text dimColor>/ hedef ${dailyTarget}</Text></Text>}
         {m && <Text>{label('Toplam')}<Text bold color="suggestion">${m.totalCost.toFixed(2)}</Text> <Text dimColor>· {millions(m.totalTokens)}</Text></Text>}
         {m && <Text>{label('Ortalama')}${avg.toFixed(2)} / gün <Text dimColor>({m.activeDays} aktif gün)</Text></Text>}
         {m && <Text>{label('Ay sonu')}<Text color="warning">~${monthEnd.toFixed(0)}</Text></Text>}
