@@ -7,7 +7,7 @@ description: timelog-gunluk kurulumu — bağlantıları kontrol eder, eksikleri
 
 Kullanıcı teknik olmayabilir (ör. PM). Her adımı kısa, sade Türkçe anlat; bir seferde tek şey iste. Bir adım başarısızsa nedenini söyle, sonraki adıma geçme.
 
-Kişisel her şey `~/.claude/timelog-gunluk/` altına yazılır. Plugin klasörüne hiçbir şey yazma.
+Kişisel her şey `~/.timelog-gunluk/` altına yazılır (`~/.claude/` altı Claude Code için hassas klasördür, gece çalışması oraya yazamaz). Plugin klasörüne hiçbir şey yazma.
 
 ## kur
 
@@ -39,7 +39,7 @@ Sırayla sor, varsayılanı öner:
 - **Slack kullanıcı id'si:** Slack profilinden al, sorma.
 - **Git yazar adları:** `git config --global user.name` ve `user.email` öner. Kullanıcı kod yazmıyorsa boş bırak.
 - **Repo klasörleri:** ev dizininde `.git` içeren klasörlerin bulunduğu kökleri öner (ör. `~/projects`). Kod yazmıyorsa boş.
-- **Kurallar dosyası (`rules_file`):** müşteri/proje/aktivite eşleşmeleri ve açıklama örnekleri. Kullanıcının hâlihazırda bir TimeLog skill'i varsa (ör. `~/.claude/skills/timelog/SKILL.md`) onu kullan. Yoksa `~/.claude/timelog-gunluk/kurallar.md`'yi aşağıdaki şablonla oluştur ve kullanıcıyla ilk 2–3 eşleşmeyi doldur (`search_projects` / `list_activities` ile id'leri doğrulayarak).
+- **Kurallar dosyası (`rules_file`):** müşteri/proje/aktivite eşleşmeleri ve açıklama örnekleri. Kullanıcının hâlihazırda bir TimeLog skill'i varsa (ör. `~/.claude/skills/timelog/SKILL.md`) onu kullan. Yoksa `~/.timelog-gunluk/kurallar.md`'yi aşağıdaki şablonla oluştur ve kullanıcıyla ilk 2–3 eşleşmeyi doldur (`search_projects` / `list_activities` ile id'leri doğrulayarak).
 - **Günlük saat:** varsayılan 8.
 
 Şablon (`kurallar.md`):
@@ -59,10 +59,10 @@ Açıklamalar müşterinin faturada okuyacağı sade cümlelerdir; teknik terim 
 
 ### 3. Zamanlama (macOS)
 
-1. Plugin'in `bin/run.sh` dosyasını `~/.claude/timelog-gunluk/run.sh`'ye kopyala, `chmod +x`. (Plugin güncellenince yol değişir; kopya sabit kalır. Güncellemeden sonra kurulumu tekrar çalıştırmak kopyayı yeniler.)
-2. `~/Library/LaunchAgents/com.icitech.timelog-gunluk.plist` yaz: `ProgramArguments` = `/bin/bash` + kopya `run.sh`; `StartCalendarInterval` iki giriş: 23:30 ve 09:00 (kullanıcı başka saat isterse onu); `StandardOutPath`/`StandardErrorPath` = `~/.claude/timelog-gunluk/logs/launchd.log`.
+1. Plugin'in `bin/run.sh` dosyasını `~/.timelog-gunluk/run.sh`'ye kopyala, `chmod +x`. (Plugin güncellenince yol değişir; kopya sabit kalır. Güncellemeden sonra kurulumu tekrar çalıştırmak kopyayı yeniler.)
+2. `~/Library/LaunchAgents/com.icitech.timelog-gunluk.plist` yaz: `ProgramArguments` = `/bin/bash` + kopya `run.sh`; `StartCalendarInterval` iki giriş: 23:30 ve 09:00 (kullanıcı başka saat isterse onu); `StandardOutPath`/`StandardErrorPath` = `~/.timelog-gunluk/logs/launchd.log`.
 3. `launchctl bootout gui/$(id -u)/com.icitech.timelog-gunluk 2>/dev/null; launchctl bootstrap gui/$(id -u) <plist>`.
-4. `~/.claude/timelog-gunluk/run.sh test` çalıştır, en yeni log dosyasını oku. Dört bağlantı da çalışıyorsa kurulum tamam.
+4. `~/.timelog-gunluk/run.sh test` çalıştır, en yeni log dosyasını oku. Dört bağlantı da çalışıyorsa kurulum tamam.
 
 Mac o saatte uykudaysa iş uyanınca çalışır; kapalıysa o çalışma atlanır, bir sonraki çalışma bekleyenleri yine işler.
 
@@ -76,4 +76,4 @@ Ne kurulduğunu, mesajın ne zaman geleceğini (her akşam, kendi Slack DM'ine; 
 
 ## kaldir
 
-`launchctl bootout ...`, plist'i sil. `~/.claude/timelog-gunluk/` klasörünü silmeden önce sor (içinde kurallar ve geçmiş durum var).
+`launchctl bootout ...`, plist'i sil. `~/.timelog-gunluk/` klasörünü silmeden önce sor (içinde kurallar ve geçmiş durum var).

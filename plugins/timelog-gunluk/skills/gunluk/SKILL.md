@@ -7,7 +7,7 @@ description: Günlük TimeLog akışı — günün zaman girişi planını kulla
 
 Bu skill çoğunlukla kimse başında yokken (`claude -p`) çalışır. Kullanıcıya soru soramazsın; sorularını Slack mesajına yaz.
 
-## Dosyalar (hepsi `~/.claude/timelog-gunluk/` altında, repoda değil)
+## Dosyalar (hepsi `~/.timelog-gunluk/` altında, repoda değil)
 
 - `config.json` — kişisel ayarlar (`/timelog-gunluk:kur` oluşturur):
   `slack_user_id`, `dm_channel_id` (ilk gönderimden sonra doldur), `git_authors` (dizi), `repo_roots` (dizi; boş olabilir), `rules_file` (eşleşme tabloları ve açıklama kuralları), `day_hours` (varsayılan 8), `skip_dates` (dizi).

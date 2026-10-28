@@ -2,7 +2,7 @@
 # launchd'nin çağırdığı sarmalayıcı. Kullanım: run.sh [aksam|sabah|test|gun YYYY-MM-DD [YYYY-MM-DD]]
 # Mod verilmezse saate bakar: 18:00 sonrası aksam, öncesi sabah.
 set -u
-DIR="$HOME/.claude/timelog-gunluk"
+DIR="$HOME/.timelog-gunluk"
 mkdir -p "$DIR/logs"
 cd "$DIR" || exit 1
 
