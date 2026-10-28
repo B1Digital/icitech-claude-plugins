@@ -7,7 +7,11 @@ Panelde iki bölüm var:
 - **Çalışıyor**: her ajan için renkli bir rol rozeti, görev numarası ve adı, saniye saniye ilerleyen süre, ajan tipi, model, araç ve hata sayısı. Altında son 18 adımı gösteren renkli bir şerit ve son araç çağrısı (hangi dosya, hangi komut) var.
 - **Bitenler**: sonuç işareti (✔ bitti, ✖ hata/red, ■ yarıda kesildi), süre, bitiş saati ve ajanın cevabının ilk satırı. Hata alanlarda neden kırmızı yazılır.
 
-En altta oturumun özeti yer alır: kaç ajan çalıştı, toplam süre ve en uzun süren ajan.
+Her ajan kartında token sayısı ve tahmini maliyet canlı artar (`↑182k ↓4.1k ~$0.42`). Tahmin, modelin liste fiyatıyla hesaplanır. Fiyatlar [LiteLLM'in herkese açık listesinden](https://github.com/BerriAI/litellm) (harcama panelinin kullandığı ccusage ile aynı kaynak) günde bir kez çekilir. İnternet yoksa son kaydedilen liste, o da yoksa eklentideki yedek tablo kullanılır. Abonelikle kullanıyorsan bu tutar API fiyatı karşılığıdır, ayrıca ödemezsin.
+
+Panelin en altında sabit bir özet durur: kaç ajan çalıştı, toplam süre, en uzun süren ajan, ajanların tahmini toplam maliyeti ve oturumun kesin maliyeti (Claude Code'un verdiği, ana konuşma dahil).
+
+Panel yeniden yüklenirse o an çalışan ajanların kartı geri gelir. Yeniden yüklemeden önceki adımları bilinmez.
 
 Rol, ajanın açıklamasından okunur. [superpowers](https://github.com/obra/superpowers)'ın `subagent-driven-development` akışındaki adlara göre ayarlıdır: **KODLA** (implementer), **SPEC** (spec review), **KALİTE** (code quality review), **TEST**, **KEŞİF** (Explore), **PLAN**. Tanınmayan açıklamalar **AJAN** olarak görünür.
 

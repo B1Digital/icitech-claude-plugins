@@ -20,6 +20,11 @@ export type Run = {
   last: string | null
   /** First line of the answer, or the deny / error reason. */
   note: string | null
+  /** Prompt tokens incl. cache reads/writes, summed over the agent's requests. */
+  tokensIn: number
+  tokensOut: number
+  /** Estimate from list prices; null when the model has no known price. */
+  usd: number | null
 }
 
 declare module 'claude-code' {

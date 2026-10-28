@@ -1,5 +1,5 @@
 import { atom, read, update } from 'claude-code'
-import type { Color, EngineInterface, Register } from 'claude-code'
+import type { Color, EngineInterface, ModelUsage, Register } from 'claude-code'
 
 import type { Run, RunStatus } from '../types'
 
@@ -8,7 +8,7 @@ const TITLE = 'Ajanlar'
 const KEEP = 40
 const STRIP = 18
 
-const runs = atom({ plugin: 'ajanlar', key: 'runs' } as const, [], { shape: 'runs-1' })
+const runs = atom({ plugin: 'ajanlar', key: 'runs' } as const, [], { shape: 'runs-2' })
 
 const isOpen = async ($: EngineInterface) =>
   (await $.ui.panes()).some(pane => pane.id === PANE)
@@ -80,6 +80,62 @@ const clock = (t: number) => {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 const shortModel = (m: string) => m.replace(/^claude-/, '').replace(/-\d{8}$/, '')
+type Price = [input: number, cacheWrite: number, cacheRead: number, output: number]   // USD per million tokens
+
+// Prices come from LiteLLM's public list (the one ccusage, and so the harcama panel, uses), refreshed daily
+// and kept in the store; the table below is only the fallback when the list is unreachable or lacks a model.
+const PRICE_URL = 'https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json'
+const PRICE_TTL = 24 * 3600_000
+let priceBook: Record<string, Price> = {}
+
+const loadPrices = async ($: EngineInterface) => {
+  const kept = (await $.store.get('prices')) as { at: number; book: Record<string, Price> } | undefined
+  if (kept) priceBook = kept.book
+  if (kept && Date.now() - kept.at < PRICE_TTL) return
+  try {
+    const res = await $.http.fetch(PRICE_URL)
+    if (!res.ok) return
+    const all = JSON.parse(res.text) as Record<string, Record<string, unknown>>
+    const book: Record<string, Price> = {}
+    for (const [id, p] of Object.entries(all)) {
+      if (!id.startsWith('claude-') || typeof p.input_cost_per_token !== 'number' || typeof p.output_cost_per_token !== 'number') continue
+      const m = (v: unknown, or: number) => (typeof v === 'number' ? v : or) * 1e6
+      book[id] = [m(p.input_cost_per_token, 0), m(p.cache_creation_input_token_cost, p.input_cost_per_token as number),
+        m(p.cache_read_input_token_cost, p.input_cost_per_token as number), m(p.output_cost_per_token, 0)]
+    }
+    if (Object.keys(book).length === 0) return
+    priceBook = book
+    await $.store.set('prices', { at: Date.now(), book })
+  } catch {}   // offline: the kept list or the fallback table stays
+}
+
+// Fallback (platform.claude.com/docs/en/about-claude/pricing, 2026-10-28); cache writes priced at 5m.
+const PRICES: [RegExp, number, number, number, number][] = [
+  [/fable-5-1|mythos-5-1/, 10, 12.5, 0.25, 50],
+  [/fable-5/, 10, 12.5, 1, 50],
+  [/opus-5-5/, 4, 5, 0.2, 20],
+  [/opus-4-1|opus-4-2025|opus-4$/, 15, 18.75, 1.5, 75],
+  [/opus-(5|4-[5-8])/, 5, 6.25, 0.5, 25],
+  [/sonnet-5-5/, 2, 2.5, 0.1, 10],
+  [/sonnet-5/, 2, 2.5, 0.2, 10],
+  [/sonnet-4/, 3, 3.75, 0.3, 15],
+  [/haiku-4-5/, 1, 1.25, 0.1, 5],
+]
+const costOf = (model: string, u: ModelUsage): number | null => {
+  const prompt = u.input_tokens + u.cache_read_input_tokens + u.cache_creation_input_tokens
+  const id = model.replace(/-\d{8}$/, '')
+  // Haiku 5.5's pricier tier over 100k prompt tokens is not in LiteLLM's list.
+  const row: Price | undefined = /haiku-5-5/.test(model) && prompt > 100_000
+    ? [0.5, 0.625, 0.05, 2.5]
+    : priceBook[model] ?? priceBook[id] ?? (PRICES.find(([re]) => re.test(model))?.slice(1) as Price | undefined)
+  if (!row) return null
+  const [inp, write, read, out] = row
+  return (u.input_tokens * inp + u.cache_creation_input_tokens * write + u.cache_read_input_tokens * read + u.output_tokens * out) / 1e6
+}
+const tokens = (n: number) =>
+  n < 1000 ? String(n) : n < 1e6 ? `${(n / 1000).toFixed(n < 10_000 ? 1 : 0)}k` : `${(n / 1e6).toFixed(1)}M`
+const usd = (n: number) => (n < 0.01 ? '<$0.01' : `$${n.toFixed(2)}`)
+
 const SPIN = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
 const STATUS: Record<Exclude<RunStatus, 'running'>, [string, Color]> = {
   done: ['✔', 'success'],
@@ -96,6 +152,20 @@ export const register: Register = on => {
     $.clock.every(400, () => {
       if (running > 0) $.ui.invalidate('ui.render')
     })
+    void loadPrices($)
+    $.clock.every(3600_000, () => void loadPrices($))
+    // After a reload (or a state reset) agents already running get their card back; what they did before is unknown.
+    const known = await $.agent.list()
+    await update($, runs, list => recount([
+      ...list,
+      ...known
+        .filter(a => (a.status === 'running' || a.status === 'pending') && !list.some(r => r.agentId === a.id))
+        .map((a): Run => ({
+          key: `adopted:${a.id}`, agentId: a.id, parentAgentId: a.parentId ?? null, description: a.description,
+          subagentType: a.type, model: '?', background: true, startedAt: Date.now(), endedAt: null, status: 'running',
+          tools: 0, errors: 0, recent: [], last: null, note: null, tokensIn: 0, tokensOut: 0, usd: 0,
+        })),
+    ].slice(-KEEP)))
     return next(e)
   })
 
@@ -133,6 +203,9 @@ export const register: Register = on => {
       recent: [],
       last: null,
       note: null,
+      tokensIn: 0,
+      tokensOut: 0,
+      usd: 0,
     }
     await update($, runs, list => recount([...list, run].slice(-KEEP)))
     if (!(await isOpen($))) void $.ui.open({ id: PANE, title: TITLE })
@@ -161,11 +234,32 @@ export const register: Register = on => {
     return ran
   })
 
+  // Every model request of a subagent: tokens and an estimated cost add up live.
+  on('turn.step', async function* ($, e, next) {
+    const ran = yield* next(e)
+    const id = e.agentId
+    const u = ran?.usage
+    if (id && u) {
+      const cost = costOf(u.model, u)
+      await patch($, r => r.agentId === id, r => ({
+        ...r,
+        tokensIn: r.tokensIn + u.input_tokens + u.cache_read_input_tokens + u.cache_creation_input_tokens,
+        tokensOut: r.tokensOut + u.output_tokens,
+        usd: r.usd === null || cost === null ? null : r.usd + cost,
+      }))
+    }
+    return ran
+  })
+
   on('turn.complete', async ($, e, next) => {
     const id = e.agentId
     if (id) {
       const status: RunStatus = e.isAborted ? 'aborted' : e.reason === 'answer' ? 'done' : 'failed'
-      const note = cut((e.answer ?? '').split('\n').find(l => l.trim()) ?? '', 90) || null
+      // First non-empty answer line without markdown marks (### heading, **bold**, - list, `code`).
+      const line = (e.answer ?? '').split('\n')
+        .map(l => l.replace(/^\s*(#{1,6}\s+|[-*>]\s+)/, '').replace(/\*\*|`/g, '').trim())
+        .find(Boolean) ?? ''
+      const note = cut(line, 90) || null
       await patch($, r => r.agentId === id && r.status === 'running', r => ({ ...r, status, endedAt: Date.now(), note }))
     }
     return next(e)
@@ -176,7 +270,9 @@ export const register: Register = on => {
     const list = await read($, runs)
     const now = Date.now()
     const width = Math.max(30, Math.min(64, (e.viewport?.columns ?? 60) - 2))
-    const room = Math.max(8, (e.viewport?.rows ?? 30) - 2)
+    // The body's real height (the frame's own rows already taken off); the viewport is the whole terminal.
+    const rows = Math.max(10, e.props.scroll?.bodyRows ?? (e.viewport?.rows ?? 30) - 8)
+    const room = rows
     const spin = SPIN[Math.floor(now / 100) % SPIN.length]
 
     const live = list.filter(r => r.status === 'running')
@@ -187,6 +283,8 @@ export const register: Register = on => {
       const ms = (r.endedAt ?? now) - r.startedAt
       return !best || ms > (best.endedAt ?? now) - best.startedAt ? r : best
     }, null)
+    const agentsUsd = list.reduce((sum, r) => sum + (r.usd ?? 0), 0)
+    const { cost } = await $.session.usage()
 
     const badge = (r: Run) => {
       const role = roleOf(r)
@@ -223,6 +321,12 @@ export const register: Register = on => {
         {r.background && ' · arka plan'}
       </Text>
     )
+    const spend = (r: Run) => (
+      <Text>
+        <Text dimColor>↑</Text>{tokens(r.tokensIn)} <Text dimColor>↓</Text>{tokens(r.tokensOut)}
+        {r.usd !== null && <Text bold color="suggestion"> ~{usd(r.usd)}</Text>}
+      </Text>
+    )
     const indent = (r: Run) => (r.parentAgentId ? '  ' : '')
 
     const liveCard = (r: Run) => {
@@ -237,6 +341,7 @@ export const register: Register = on => {
           <Text bold color={role.color}>{mmss(now - r.startedAt)}</Text>
         </Box>,
         <Text>{indent(r)}<Text color={role.color}>  │ </Text>{meta(r)}</Text>,
+        <Text>{indent(r)}<Text color={role.color}>  │ </Text>{spend(r)}</Text>,
         <Text>{indent(r)}<Text color={role.color}>  │ </Text>{strip(r)}</Text>,
         <Text>{indent(r)}<Text color={role.color}>  └ </Text><Text>{r.last ?? <Text dimColor>ilk adım bekleniyor</Text>}</Text></Text>,
         <Text> </Text>,
@@ -251,16 +356,18 @@ export const register: Register = on => {
         </Box>,
         r.note && r.status !== 'done'
           ? <Text>{indent(r)}  <Text color={color}>↳ {cut(r.note, width - 6)}</Text></Text>
-          : <Text>{indent(r)}  <Text dimColor>{r.tools} araç{r.note ? ` · ${cut(r.note, width - 16)}` : ''}</Text></Text>,
+          : <Text>{indent(r)}  <Text dimColor>{r.tools} araç · </Text>{r.usd !== null ? <Text color="suggestion">~{usd(r.usd)}</Text> : <Text dimColor>{tokens(r.tokensIn + r.tokensOut)} tok</Text>}<Text dimColor>{r.note ? ` · ${cut(r.note, width - 24)}` : ''}</Text></Text>,
       ]
     }
 
-    // Live cards take 5 rows each, ended rows 2; ended rows fill what is left.
-    const used = 6 + live.length * 5 + (live.length ? 1 : 0) + 4
+    // Live cards take 6 rows each, ended rows 2; ended rows fill what is left above the pinned footer.
+    const used = 2 + (live.length ? 2 + live.length * 6 : 0) + 2 + 4   // header, live block, BİTENLER + overflow line, footer
     const endedFit = Math.max(0, Math.floor((room - used) / 2))
 
+    // Header and runs grow above; the summary and legend stay pinned to the pane's last rows.
     return (
-      <Box flexDirection="column">
+      <Box flexDirection="column" height={rows}>
+        <Box flexDirection="column" flexGrow={1} overflow="hidden">
         <Box width={width} justifyContent="space-between">
           <Text><Text bold color="claude">◆ icitech</Text><Text bold> ajanlar</Text></Text>
           <Text>
@@ -282,14 +389,17 @@ export const register: Register = on => {
           ...ended.slice(0, endedFit).flatMap(endedRow),
           ended.length > endedFit ? <Text dimColor>  … {ended.length - endedFit} eski kayıt</Text> : null,
         ]}
-        {list.length > 0 && [
-          <Text dimColor>{'─'.repeat(width)}</Text>,
-          <Text>
-            <Text dimColor>Oturum </Text><Text bold>{list.length}</Text><Text dimColor> ajan · toplam </Text>
-            <Text bold color="suggestion">{mmss(totalMs)}</Text>
-            {longest && <Text dimColor> · en uzun {roleOf(longest).label.toLowerCase()} {mmss((longest.endedAt ?? now) - longest.startedAt)}</Text>}
-          </Text>,
-        ]}
+        </Box>
+        <Text dimColor>{'─'.repeat(width)}</Text>
+        <Text>
+          <Text dimColor>Oturum </Text><Text bold>{list.length}</Text><Text dimColor> ajan · </Text>
+          <Text bold color="suggestion">{mmss(totalMs)}</Text>
+          {longest && <Text dimColor> · en uzun {roleOf(longest).label} {mmss((longest.endedAt ?? now) - longest.startedAt)}</Text>}
+        </Text>
+        <Text>
+          <Text dimColor>Maliyet  ajanlar </Text><Text bold color="suggestion">~{usd(agentsUsd)}</Text>
+          {cost && [<Text dimColor> · oturum </Text>, <Text bold color="warning">{usd(cost.usd)}</Text>]}
+        </Text>
         <Text dimColor>
           <Text color="suggestion">◇</Text> oku <Text color="claude">✎</Text> yaz <Text color="warning">▸</Text> bash{' '}
           <Text color="suggestion">⌕</Text> ara <Text color="ide">⬡</Text> mcp · /ajanlar kapatır
