@@ -1,20 +1,24 @@
 import { atom, read, update } from 'claude-code'
 import type { Color, EngineInterface, ModelUsage, Register } from 'claude-code'
 
-import type { Run, RunStatus } from '../types'
+import type { Main, Run, RunStatus, Workflow } from '../types'
 
 const PANE = 'agents'
 const TITLE = 'Ajanlar'
 const KEEP = 40
 const STRIP = 18
 
-const runs = atom({ plugin: 'ajanlar', key: 'runs' } as const, [], { shape: 'runs-2' })
+const runs = atom({ plugin: 'ajanlar', key: 'runs' } as const, [], { shape: 'runs-3' })
+const IDLE: Main = { busy: false, since: 0, tools: 0, errors: 0, recent: [], last: null, tokensIn: 0, tokensOut: 0, usd: 0 }
+const main = atom({ plugin: 'ajanlar', key: 'main' } as const, IDLE, { shape: 'main-1' })
+const workflows = atom({ plugin: 'ajanlar', key: 'workflows' } as const, [], { shape: 'workflows-1' })
 
 const isOpen = async ($: EngineInterface) =>
   (await $.ui.panes()).some(pane => pane.id === PANE)
 
 // Redraw ticks only while something runs; module state is rebuilt on reload, which only pauses the spinner.
 let running = 0
+let mainBusy = false
 const recount = (list: Run[]) => {
   running = list.filter(r => r.status === 'running').length
   return list
@@ -53,6 +57,17 @@ const GLYPHS: [RegExp, string, Color][] = [
 const glyph = (tool: string): [string, Color] => {
   const hit = GLYPHS.find(([re]) => re.test(tool))
   return hit ? [hit[1], hit[2]] : ['•', 'text']
+}
+
+// A Workflow call's script starts with `export const meta = { name, phases: [{ title }] }`; a saved one goes by `name`.
+const workflowOf = (id: string, args: Record<string, unknown>): Workflow => {
+  const script = typeof args.script === 'string' ? args.script : ''
+  const meta = script.match(/meta\s*=\s*\{([\s\S]*?)\n\}/)?.[1] ?? script.slice(0, 2000)
+  const name = meta.match(/name\s*:\s*['"`]([^'"`]+)/)?.[1]
+    ?? (typeof args.name === 'string' ? args.name : null)
+    ?? (typeof args.scriptPath === 'string' ? base(args.scriptPath).replace(/\.[jt]s$/, '') : 'workflow')
+  const phases = [...(meta.match(/phases\s*:\s*\[([\s\S]*?)\]/)?.[1] ?? '').matchAll(/title\s*:\s*['"`]([^'"`]+)/g)].map(m => m[1]!)
+  return { id, name, phases, startedAt: Date.now() }
 }
 
 const base = (p: unknown) => (typeof p === 'string' ? p.split('/').pop() ?? p : '')
@@ -150,10 +165,11 @@ export const register: Register = on => {
       description: 'Alt ajan panelini aç/kapat (canlı rol, görev, süre, araçlar)',
     })
     $.clock.every(400, () => {
-      if (running > 0) $.ui.invalidate('ui.render')
+      if (running > 0 || mainBusy) $.ui.invalidate('ui.render')
     })
     void loadPrices($)
     $.clock.every(3600_000, () => void loadPrices($))
+    await update($, main, m => ((mainBusy = m.busy), m))   // a reload keeps the spinner going mid-turn
     // After a reload (or a state reset) agents already running get their card back; what they did before is unknown.
     const known = await $.agent.list()
     await update($, runs, list => recount([
@@ -164,6 +180,7 @@ export const register: Register = on => {
           key: `adopted:${a.id}`, agentId: a.id, parentAgentId: a.parentId ?? null, description: a.description,
           subagentType: a.type, model: '?', background: true, startedAt: Date.now(), endedAt: null, status: 'running',
           tools: 0, errors: 0, recent: [], last: null, note: null, tokensIn: 0, tokensOut: 0, usd: 0,
+          workflowId: null, workflowIndex: null,
         })),
     ].slice(-KEEP)))
     return next(e)
@@ -206,7 +223,12 @@ export const register: Register = on => {
       tokensIn: 0,
       tokensOut: 0,
       usd: 0,
+      workflowId: e.workflow ? e.tool_use_id : null,
+      workflowIndex: e.workflow?.agentIndex ?? null,
     }
+    // A workflow agent whose Workflow call this load did not see (resumed run, reload) still gets a group.
+    if (e.workflow) await update($, workflows, list => list.some(w => w.id === e.tool_use_id) ? list
+      : [...list, { id: e.tool_use_id, name: 'workflow', phases: [], startedAt: Date.now() }].slice(-10))
     await update($, runs, list => recount([...list, run].slice(-KEEP)))
     if (!(await isOpen($))) void $.ui.open({ id: PANE, title: TITLE })
 
@@ -221,8 +243,18 @@ export const register: Register = on => {
 
   on('tool.call', async ($, e, next) => {
     const id = e.agentId
-    if (!id) return next(e)
-    const last = detail(e.tool, e as unknown as Record<string, unknown>)
+    const args = e as unknown as Record<string, unknown>
+    if (!id) {
+      // The main conversation's own calls feed the ANA OTURUM card; a Workflow call opens a group.
+      const flow = e.tool === 'Workflow' ? workflowOf(e.tool_use_id, args) : null
+      if (flow) await update($, workflows, list => [...list, flow].slice(-10))
+      const last = flow ? `Workflow ${flow.name}` : detail(e.tool, args)
+      await update($, main, m => ({ ...m, tools: m.tools + 1, recent: [...m.recent, e.tool].slice(-STRIP), last }))
+      const ran = await next(e)
+      if (ran.isError) await update($, main, m => ({ ...m, errors: m.errors + 1 }))
+      return ran
+    }
+    const last = detail(e.tool, args)
     await patch($, r => r.agentId === id, r => ({
       ...r,
       tools: r.tools + 1,
@@ -239,6 +271,15 @@ export const register: Register = on => {
     const ran = yield* next(e)
     const id = e.agentId
     const u = ran?.usage
+    if (!id && u) {
+      const cost = costOf(u.model, u)
+      await update($, main, m => ({
+        ...m,
+        tokensIn: m.tokensIn + u.input_tokens + u.cache_read_input_tokens + u.cache_creation_input_tokens,
+        tokensOut: m.tokensOut + u.output_tokens,
+        usd: m.usd === null || cost === null ? null : m.usd + cost,
+      }))
+    }
     if (id && u) {
       const cost = costOf(u.model, u)
       await patch($, r => r.agentId === id, r => ({
@@ -251,8 +292,20 @@ export const register: Register = on => {
     return ran
   })
 
+  on('turn.start', async ($, e, next) => {
+    if (!e.agentId) {
+      mainBusy = true
+      await update($, main, m => ({ ...m, busy: true, since: Date.now() }))
+    }
+    return next(e)
+  })
+
   on('turn.complete', async ($, e, next) => {
     const id = e.agentId
+    if (!id) {
+      mainBusy = false
+      await update($, main, m => ({ ...m, busy: false, since: Date.now() }))
+    }
     if (id) {
       const status: RunStatus = e.isAborted ? 'aborted' : e.reason === 'answer' ? 'done' : 'failed'
       // First non-empty answer line without markdown marks (### heading, **bold**, - list, `code`).
@@ -275,8 +328,12 @@ export const register: Register = on => {
     const room = rows
     const spin = SPIN[Math.floor(now / 100) % SPIN.length]
 
-    const live = list.filter(r => r.status === 'running')
-    const ended = list.filter(r => r.status !== 'running').sort((a, b) => (b.endedAt ?? 0) - (a.endedAt ?? 0))
+    const m = await read($, main)
+    const flows = await read($, workflows)
+    // Workflow agents are drawn inside their workflow's block, not as cards of their own.
+    const plain = list.filter(r => !r.workflowId)
+    const live = plain.filter(r => r.status === 'running')
+    const ended = plain.filter(r => r.status !== 'running').sort((a, b) => (b.endedAt ?? 0) - (a.endedAt ?? 0))
     const count = (s: RunStatus) => list.filter(r => r.status === s).length
     const totalMs = list.reduce((sum, r) => sum + ((r.endedAt ?? now) - r.startedAt), 0)
     const longest = list.reduce<Run | null>((best, r) => {
@@ -360,8 +417,88 @@ export const register: Register = on => {
       ]
     }
 
-    // Live cards take 6 rows each, ended rows 2; ended rows fill what is left above the pinned footer.
-    const used = 2 + (live.length ? 2 + live.length * 6 : 0) + 2 + 4   // header, live block, BİTENLER + overflow line, footer
+    const stripOf = (recent: string[]) => (
+      <Text>
+        {recent.map(t => {
+          const [g, c] = glyph(t)
+          return <Text color={c}>{g}</Text>
+        })}
+      </Text>
+    )
+    const mainCard = [
+      <Box width={width} justifyContent="space-between">
+        <Text>
+          <Text color={m.busy ? 'claude' : 'subtle'} bold>{m.busy ? spin : '●'} </Text>
+          <Text backgroundColor="claude" color="inverseText" bold>{' ANA OTURUM '}</Text>
+          <Text bold color={m.busy ? 'claude' : undefined} dimColor={!m.busy}>{m.busy ? ' çalışıyor' : ' bekliyor'}</Text>
+        </Text>
+        <Text bold={m.busy} color={m.busy ? 'claude' : undefined} dimColor={!m.busy}>{m.since ? mmss(now - m.since) : ''}</Text>
+      </Box>,
+      <Text>
+        <Text color="claude">  │ </Text>
+        <Text dimColor>{m.tools} araç{m.errors > 0 ? '' : ' · '}</Text>
+        {m.errors > 0 && <Text color="error"> · {m.errors} hata · </Text>}
+        <Text dimColor>↑</Text>{tokens(m.tokensIn)} <Text dimColor>↓</Text>{tokens(m.tokensOut)}
+        {m.usd !== null && <Text bold color="suggestion"> ~{usd(m.usd)}</Text>}
+      </Text>,
+      <Text><Text color="claude">  │ </Text>{m.recent.length ? stripOf(m.recent) : <Text dimColor>henüz araç çağrısı yok</Text>}</Text>,
+      <Text><Text color="claude">  └ </Text>{m.last ? <Text dimColor={!m.busy}>{m.last}</Text> : <Text dimColor>—</Text>}</Text>,
+    ]
+
+    // Newest workflows first; a running one shows its live agents, a finished one folds into a line.
+    const flowBlocks = flows.slice(-3).reverse().flatMap(w => {
+      const agents = list.filter(r => r.workflowId === w.id)
+      if (agents.length === 0 && now - w.startedAt > 10 * 60_000) return []
+      const going = agents.filter(r => r.status === 'running').sort((a, b) => (a.workflowIndex ?? 0) - (b.workflowIndex ?? 0))
+      const done = agents.filter(r => r.status === 'done').length
+      const bad = agents.filter(r => r.status === 'failed' || r.status === 'aborted').length
+      const isLive = going.length > 0 || agents.length === 0
+      const end = isLive ? now : Math.max(...agents.map(r => r.endedAt ?? now))
+      const spent = agents.reduce((sum, r) => sum + (r.usd ?? 0), 0)
+      const headline = (
+        <Box width={width} justifyContent="space-between">
+          <Text>
+            <Text color={isLive ? 'merged' : bad ? 'warning' : 'success'} bold>{isLive ? spin : bad ? '■' : '✔'} </Text>
+            <Text backgroundColor="merged" color="inverseText" bold>{' WORKFLOW '}</Text>
+            <Text bold> {cut(w.name, width - 34)}</Text>
+          </Text>
+          <Text>
+            <Text bold color={isLive ? 'merged' : undefined}>{mmss(end - w.startedAt)}</Text>
+            <Text color="suggestion"> ~{usd(spent)}</Text>
+          </Text>
+        </Box>
+      )
+      const tally = (
+        <Text>
+          <Text dimColor>{agents.length} ajan · </Text>
+          <Text color="success">✔ {done}</Text>
+          {bad > 0 && <Text color="error">  ✖ {bad}</Text>}
+          {going.length > 0 && <Text color="merged">  ▶ {going.length}</Text>}
+        </Text>
+      )
+      if (!isLive) return [headline, <Text>  {tally}</Text>]
+      const total = Math.max(1, agents.length)
+      const full = Math.round(((done + bad) / total) * 20)
+      const shown = going.slice(0, 5)
+      return [
+        headline,
+        <Text>  <Text color="merged">{'━'.repeat(full)}</Text><Text dimColor>{'─'.repeat(20 - full)}</Text> {tally}</Text>,
+        w.phases.length > 0 ? <Text dimColor>  aşamalar: {w.phases.join(' → ')}</Text> : null,
+        ...shown.map(r => (
+          <Box width={width} justifyContent="space-between">
+            <Text>
+              {'  '}<Text color="merged">{spin}</Text> <Text dimColor>#{r.workflowIndex}</Text> {cut(r.description || r.subagentType, width - 22)}
+            </Text>
+            <Text><Text dimColor>{r.tools} araç </Text><Text color="merged">{mmss(now - r.startedAt)}</Text></Text>
+          </Box>
+        )),
+        going.length > shown.length ? <Text dimColor>    … {going.length - shown.length} ajan daha çalışıyor</Text> : null,
+        <Text> </Text>,
+      ].filter(Boolean)
+    })
+
+    // Ended rows (2 each) fill what is left above the pinned footer.
+    const used = 2 + 1 + mainCard.length + 1 + flowBlocks.length + (live.length ? 1 + live.length * 6 : 0) + 2 + 4
     const endedFit = Math.max(0, Math.floor((room - used) / 2))
 
     // Header and runs grow above; the summary and legend stay pinned to the pane's last rows.
@@ -378,12 +515,12 @@ export const register: Register = on => {
           </Text>
         </Box>
         <Text color="claude">{'━'.repeat(width)}</Text>
-        {list.length === 0 && [
-          <Text> </Text>,
-          <Text dimColor>Henüz ajan çalışmadı.</Text>,
-          <Text dimColor>Bir alt ajan başladığında burada canlı görünür.</Text>,
-        ]}
-        {live.length > 0 && [<Text> </Text>, <Text bold color="claude">ÇALIŞIYOR</Text>, ...live.flatMap(liveCard)]}
+        <Text> </Text>
+        {mainCard}
+        <Text> </Text>
+        {flowBlocks}
+        {list.length === 0 && <Text dimColor>Alt ajan başladığında burada canlı görünür.</Text>}
+        {live.length > 0 && [<Text bold color="claude">ÇALIŞIYOR</Text>, ...live.flatMap(liveCard)]}
         {ended.length > 0 && [
           <Text bold color="subtle">BİTENLER</Text>,
           ...ended.slice(0, endedFit).flatMap(endedRow),

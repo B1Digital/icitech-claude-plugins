@@ -20,7 +20,7 @@ test('an implementer run shows live, then ends with its result', async ($, on) =
   on('ui.panes', () => ({ value: [] }))
   on('ui.open', () => ({ value: { isPlaced: true } }))
   on('session.start', (_, e) => ({ cwd: e.cwd }))
-  on('clock.every', () => ({ value: () => {} }))
+  on('clock.every', () => ({ value: null }))
   on('agent.list', () => ({ value: [] }))
   on('store.get', () => ({ value: undefined }))
   on('store.set', () => ({ value: undefined }))
@@ -69,5 +69,32 @@ test('a denied spawn is listed as failed with the reason', async ($, on) => {
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   expect((await ui.find({ type: 'Text', text: /✖  SPEC  #1/ })) != null).toBe(true)
   expect((await ui.find({ type: 'Text', text: /policy says no/ })) != null).toBe(true)
+  await ui.unmount()
+})
+
+test('the main session card and a workflow block show live', async ($, on) => {
+  on('command.register', () => ({ value: { command: 'ajanlar' } }))
+  on('clock.every', () => ({ value: null }))
+  on('agent.list', () => ({ value: [] }))
+  on('store.get', () => ({ value: undefined }))
+  on('http.fetch', () => ({ value: { status: 500, ok: false, headers: {}, text: '' } }))
+  on('session.usage', () => ({ value: { startedAt: 0, context: {}, rateLimits: [], cost: { usd: 2 } } }))
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('turn.start', (_, e) => ({ turnId: e.turnId }))
+  on('tool.call', () => ({ result: {} }))
+
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await $.turn.start({ text: 'hi', turnId: 't0' })
+  await $.tool.call({ tool: 'Read', file_path: '/repo/Program.cs' })
+  await $.tool.call({
+    tool: 'Workflow',
+    script: "export const meta = {\n  name: 'review-changes',\n  description: 'x',\n  phases: [{ title: 'Review' }, { title: 'Verify' }],\n}\nawait agent('a')",
+  })
+
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect((await ui.find({ type: 'Text', text: / ANA OTURUM  çalışıyor/ })) != null ? 'ok' : 'missing / ANA OTURUM  çalışıyor/').toBe('ok')
+  expect((await ui.find({ type: 'Text', text: /Workflow review-changes/ })) != null ? 'ok' : 'missing /Workflow review-changes/').toBe('ok')
+  expect((await ui.find({ type: 'Text', text: / WORKFLOW  review-changes/ })) != null ? 'ok' : 'missing / WORKFLOW  review-changes/').toBe('ok')
+  expect((await ui.find({ type: 'Text', text: /aşamalar: Review → Verify/ })) != null ? 'ok' : 'missing /aşamalar: Review → Verify/').toBe('ok')
   await ui.unmount()
 })

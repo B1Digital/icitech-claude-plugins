@@ -1,1 +1,1 @@
-{ "name": "ajanlar", "version": "0.2.0", "author": { "name": "icitech team" }, "description": "Çalışan alt ajanları (subagent) sağ panelde canlı gösterir: rol, görev, süre, araç şeridi, sonuç; /ajanlar aç-kapa", "types": "./types/index.d.ts" }
+{ "name": "ajanlar", "version": "0.3.0", "author": { "name": "icitech team" }, "description": "Çalışan alt ajanları (subagent) sağ panelde canlı gösterir: rol, görev, süre, araç şeridi, sonuç; /ajanlar aç-kapa", "types": "./types/index.d.ts" }
