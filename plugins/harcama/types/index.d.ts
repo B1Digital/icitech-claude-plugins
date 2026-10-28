@@ -26,17 +26,11 @@ export type Snapshot = {
   fetchedAt: number
 }
 
-// What this session has cost and which warnings it already gave; reset when the session starts over (/clear).
-export type Watch = {
-  startedAt: number
-  usd: number
-  model: string
-  budgetStep: number
-  opusHinted: boolean
-}
+// Limit pencereleri (kind@resetsAt) için verilmiş uyarılar; pencere yenilenince anahtar değişir, uyarı yeniden verilir.
+export type Warned = string[]
 
 declare module 'claude-code' {
   interface PluginState {
-    'harcama': { snapshot: Shaped<Snapshot | null>; watch: Shaped<Watch | null> }
+    'harcama': { snapshot: Shaped<Snapshot | null>; warned: Shaped<Warned> }
   }
 }

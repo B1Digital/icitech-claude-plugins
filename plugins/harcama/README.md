@@ -10,14 +10,11 @@ Panelde üç bölüm var:
 
 Panel açıkken dakikada bir yenilenir; kapalıyken hiçbir şey çalıştırmaz.
 
-## Bütçe uyarıları (0.2.0)
+## Limit uyarısı (0.3.0)
 
-- **Durum satırı:** `oturum $12.40 · opus`, yani bu oturumun maliyeti ve modeli. Panel kapalıyken de görünür.
-- **Oturum bütçesi:** maliyet her $15 katını geçince bir kez uyarı verir ($15, $30, …): iş bittiyse `/clear` ile yeni oturum daha ucuz.
-- **Model uyarısı:** Opus açıkken oturum $10'u geçince bir kez hatırlatır: deploy, issue, git gibi rutin işte `/model sonnet` yeter.
-- **Günlük hedef:** panelde "Bugün" satırı $40'ı geçince kırmızı olur.
+5 saatlik ya da haftalık abonelik limiti %80'i geçince o pencere için bir kez uyarır. Pencere sıfırlanınca uyarı yeniden verilir. Eşik `/config` → harcama → `limit_warn_pct`.
 
-Eşikleri `/config` → harcama altından değiştirebilirsin (`session_budget`, `opus_hint_at`, `daily_target`). `/clear` sayaçları sıfırlar.
+Max aboneliğinde paneldeki dolar rakamları API fiyatıyla tahmindir; fatura sabittir. Asıl sınır limitlerdir.
 
 ## Gereksinim
 

@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, RenderChildren } from 'claude-code'
 
-import type { Block, Day, Month, Snapshot, Watch } from '../types'
+import type { Block, Day, Month, Snapshot, Warned } from '../types'
 
 const PANE = 'usage'
 const TITLE = 'Harcama'
@@ -10,29 +10,21 @@ const snapshot = atom({ plugin: 'harcama', key: 'snapshot' } as const, null, {
   shape: 'snapshot-5',
 })
 
-const watch = atom({ plugin: 'harcama', key: 'watch' } as const, null, { shape: 'watch-1' })
+const warned = atom({ plugin: 'harcama', key: 'warned' } as const, [] as Warned, { shape: 'warned-1' })
 
 const num = (v: unknown, fallback: number) => (typeof v === 'number' && v > 0 ? v : fallback)
-const shortModel = (id: string) => id.match(/opus|sonnet|haiku|fable/)?.[0] ?? id
 
-// Bütçe katı ve Opus uyarısı oturum başına bir kez; /clear startedAt'i değiştirir, sayaçlar sıfırlanır.
-const observe = async ($: EngineInterface, usd: number, model: string | null, opts: { budget: number; opusAt: number }) => {
-  const { startedAt } = await $.session.usage()
-  const prev = await read($, watch)
-  const w: Watch = prev && prev.startedAt === startedAt
-    ? { ...prev, usd, model: model ?? prev.model }
-    : { startedAt, usd, model: model ?? prev?.model ?? '', budgetStep: 0, opusHinted: false }
-  const step = Math.floor(usd / opts.budget)
-  if (step > w.budgetStep) {
-    w.budgetStep = step
-    $.ui.toast(`Bu oturum $${(step * opts.budget).toFixed(0)}'i geçti ($${usd.toFixed(2)}). İş bittiyse /clear ile yeni oturum daha ucuz.`)
-  }
-  if (!w.opusHinted && /opus/.test(w.model) && usd >= opts.opusAt) {
-    w.opusHinted = true
-    $.ui.toast(`Opus açık, oturum $${usd.toFixed(2)}. Deploy, issue, git gibi rutin işte /model sonnet yeter.`)
-  }
-  await update($, watch, () => w)
-  $.ui.status(`oturum $${usd.toFixed(2)}${w.model ? ' · ' + shortModel(w.model) : ''}`)
+const KIND_NAMES: Record<string, string> = { five_hour: '5 saatlik', seven_day: 'Haftalık' }
+
+// Her limit penceresi (kind + sıfırlanma zamanı) için eşik bir kez uyarılır.
+const checkLimits = async ($: EngineInterface, limits: { kind: string; percentUsed: number; resetsAt?: string }[], pct: number) => {
+  const done = await read($, warned)
+  const fresh = limits.filter(l => KIND_NAMES[l.kind] && l.percentUsed >= pct && !done.includes(`${l.kind}@${l.resetsAt ?? ''}`))
+  if (!fresh.length) return
+  for (const l of fresh)
+    $.ui.toast(`${KIND_NAMES[l.kind]} limit %${Math.round(l.percentUsed)} doldu${l.resetsAt ? `, sıfırlanma ${resetAt(l.resetsAt, new Date())}` : ''}. Hammaliyeyi Codex/Gemini'ye vermenin tam zamanı.`)
+  // Eski pencerelerin anahtarları birikmesin: yalnız son 10'u tut.
+  await update($, warned, prev => [...prev, ...fresh.map(l => `${l.kind}@${l.resetsAt ?? ''}`)].slice(-10))
 }
 
 const isOpen = async ($: EngineInterface) =>
@@ -154,17 +146,10 @@ const barParts = (pct: number, width = 20) => {
 }
 
 export const register: Register = (on, options) => {
-  const opts = { budget: num(options.session_budget, 15), opusAt: num(options.opus_hint_at, 10) }
-  const dailyTarget = num(options.daily_target, 40)
-  let lastModel: string | null = null
-
-  on('turn.complete', async ($, e, next) => {
-    if (e.usage?.model) lastModel = e.usage.model
-    return next(e)
-  })
+  const warnPct = num(options.limit_warn_pct, 80)
 
   on('session.measure', async ($, e, next) => {
-    if (e.cost && e.changed.includes('cost')) await observe($, e.cost.usd, lastModel, opts)
+    if (e.changed.includes('rateLimits')) await checkLimits($, e.rateLimits, warnPct)
     return next(e)
   })
 
@@ -214,8 +199,7 @@ export const register: Register = (on, options) => {
     const pace = b ? rateColor(b.costPerHour) : 'text'
     const avg = m ? m.totalCost / Math.max(1, m.activeDays) : 0
     const dayColor = (cost: number) => (cost <= avg ? 'success' : cost <= avg * 1.5 ? 'warning' : 'error')
-    const todayColor = !m ? 'success' : m.todayCost > dailyTarget ? 'error' : dayColor(m.todayCost)
-    const w = await read($, watch)
+    const todayColor = m ? dayColor(m.todayCost) : 'success'
 
     // Month calendar: Monday-first rows, null pads the days before the 1st.
     const costs = new Map(snap.calendar.map(d => [Number(d.date.slice(8, 10)), d.cost]))
@@ -280,9 +264,8 @@ export const register: Register = (on, options) => {
         ])}
         <Text> </Text>
         <Text bold color="claude">Bu ay</Text>
-        {w && <Text>{label('Oturum')}<Text bold color={w.usd >= opts.budget ? 'warning' : 'suggestion'}>${w.usd.toFixed(2)}</Text>{w.model ? <Text dimColor> · {shortModel(w.model)}</Text> : null}</Text>}
         {!m && <Text dimColor>Veri yok.</Text>}
-        {m && <Text>{label('Bugün')}<Text bold color={todayColor}>${m.todayCost.toFixed(2)}</Text> <Text dimColor>/ hedef ${dailyTarget}</Text></Text>}
+        {m && <Text>{label('Bugün')}<Text bold color={todayColor}>${m.todayCost.toFixed(2)}</Text></Text>}
         {m && <Text>{label('Toplam')}<Text bold color="suggestion">${m.totalCost.toFixed(2)}</Text> <Text dimColor>· {millions(m.totalTokens)}</Text></Text>}
         {m && <Text>{label('Ortalama')}${avg.toFixed(2)} / gün <Text dimColor>({m.activeDays} aktif gün)</Text></Text>}
         {m && <Text>{label('Ay sonu')}<Text color="warning">~${monthEnd.toFixed(0)}</Text></Text>}

@@ -1,29 +1,17 @@
 {
   "name": "harcama",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "author": {
     "name": "icitech team"
   },
-  "description": "Claude harcamasını sağ panelde gösterir: oturum maliyeti ve bütçe uyarısı, 5 saatlik blok, ay özeti ve takvim; /harcama aç-kapa",
+  "description": "Claude harcamasını sağ panelde gösterir: limit uyarısı, 5 saatlik blok, ay özeti ve takvim; /harcama aç-kapa",
   "types": "./types/index.d.ts",
   "userConfig": {
-    "session_budget": {
+    "limit_warn_pct": {
       "type": "number",
-      "title": "Oturum bütçesi ($)",
-      "description": "Oturum maliyeti bu tutarın her katını geçince bir kez uyarır (15 → 15, 30, 45…).",
-      "default": 15
-    },
-    "opus_hint_at": {
-      "type": "number",
-      "title": "Model uyarısı ($)",
-      "description": "Opus açıkken oturum bu tutarı geçince bir kez \"rutin işte Sonnet yeter\" der.",
-      "default": 10
-    },
-    "daily_target": {
-      "type": "number",
-      "title": "Günlük hedef ($)",
-      "description": "Bugünkü harcama bunu geçince panelde kırmızı görünür.",
-      "default": 40
+      "title": "Limit uyarısı (%)",
+      "description": "5 saatlik ya da haftalık limit bu yüzdeyi geçince o pencere için bir kez uyarır.",
+      "default": 80
     }
   }
 }

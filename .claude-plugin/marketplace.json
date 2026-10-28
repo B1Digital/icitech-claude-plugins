@@ -8,7 +8,7 @@
     {
       "name": "harcama",
       "source": "./plugins/harcama",
-      "description": "Claude harcamasını sağ panelde gösterir: oturum maliyeti ve bütçe uyarısı, limitler, ay takvimi, 5 saatlik blok; /harcama aç-kapa"
+      "description": "Claude harcamasını sağ panelde gösterir: limit uyarısı, limitler, ay takvimi, 5 saatlik blok; /harcama aç-kapa"
     },
     {
       "name": "ajanlar",
