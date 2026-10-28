@@ -1,0 +1,1 @@
+{ "name": "timelog-gunluk", "version": "0.1.0", "author": { "name": "icitech team" }, "description": "Her akşam günün zaman girişi planını Slack DM'ine atar, thread'deki onayınla TimeLog'a girer; /timelog-gunluk:kur" }

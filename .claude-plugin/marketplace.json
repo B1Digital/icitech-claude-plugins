@@ -14,6 +14,11 @@
       "name": "ajanlar",
       "source": "./plugins/ajanlar",
       "description": "Çalışan alt ajanları sağ panelde canlı gösterir: rol rozeti, görev, süre, araç şeridi, sonuç; /ajanlar aç-kapa"
+    },
+    {
+      "name": "timelog-gunluk",
+      "source": "./plugins/timelog-gunluk",
+      "description": "Günün zaman girişi planını her akşam Slack DM'ine atar, thread'deki onayınla TimeLog'a girer"
     }
   ]
 }
