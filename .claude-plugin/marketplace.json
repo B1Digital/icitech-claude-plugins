@@ -19,6 +19,11 @@
       "name": "timelog-gunluk",
       "source": "./plugins/timelog-gunluk",
       "description": "Günün zaman girişi planını her akşam Slack DM'ine atar, thread'deki onayınla TimeLog'a girer"
+    },
+    {
+      "name": "ici-internal-documents",
+      "source": "./plugins/ici-internal-documents",
+      "description": "icitech şablonunda Türkçe teknik doküman (PDF): kapak, İçindekiler, tablolar, akış şemaları, sade yazım"
     }
   ]
 }
