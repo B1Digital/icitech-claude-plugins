@@ -147,9 +147,22 @@ def box(flowables, fill=LIGHTBOX, brd=LIGHTBRD, pad=9):
         ('TOPPADDING',(0,0),(-1,-1),pad),('BOTTOMPADDING',(0,0),(-1,-1),pad)]))
     return t
 
+def _wrap_code(lines, width):
+    """Uzun satırı kutu genişliğinde kaydırır (XPreformatted kendisi kaydırmaz, taşar). Devam satırı +4 girintili."""
+    out=[]
+    for l in lines:
+        ind=len(l)-len(l.lstrip(' '))
+        while len(l)>width:
+            cut=max(l.rfind(c,ind+10,width) for c in ' ><,')
+            cut=cut+1 if cut>ind+10 else width
+            out.append(l[:cut].rstrip()); l=' '*(ind+4)+l[cut:].lstrip()
+        out.append(l)
+    return out
+
 def codeblock(lines):
     if isinstance(lines,str): lines=lines.split('\n')
-    p=XPreformatted("\n".join(esc(l) for l in lines), st_code)
+    width=int((CW-24)/(0.6*st_code.fontSize))  # Courier: karakter genişliği 0.6 em
+    p=XPreformatted("\n".join(esc(l) for l in _wrap_code(lines, width)), st_code)
     t=Table([[p]],colWidths=[CW])
     t.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,-1),CODEBG),('ROUNDEDCORNERS',[6,6,6,6]),
         ('LEFTPADDING',(0,0),(-1,-1),12),('RIGHTPADDING',(0,0),(-1,-1),12),
