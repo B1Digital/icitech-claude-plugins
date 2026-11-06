@@ -7,6 +7,7 @@ icitech team'in Claude Code için yaptığı eklentiler (mod'lar).
 | [harcama](plugins/harcama) | `/harcama` ile sağda bir panel açar: abonelik limitleri, ay takvimi, günlük harcama ve 5 saatlik blok |
 | [ajanlar](plugins/ajanlar) | `/ajanlar` ile sağda bir panel açar: çalışan alt ajanlar canlı (rol, görev, süre, araç şeridi, sonuç) |
 | [ici-internal-documents](plugins/ici-internal-documents) | icitech şablonunda Türkçe teknik doküman (PDF): kapak, İçindekiler, tablolar, akış şemaları, sade yazım |
+| [ici-store-guard](plugins/ici-store-guard) | App Store ve Google Play'e göndermeden önce ret denetimi: kod, derlenmiş paket, mağaza görselleri, simülatörde reviewer testi; tek GO / NO-GO raporu |
 
 ## Kurulum
 
@@ -17,6 +18,7 @@ Claude Code oturumunda:
 /plugin install harcama@icitech
 /plugin install ajanlar@icitech
 /plugin install ici-internal-documents@icitech
+/plugin install ici-store-guard@icitech
 ```
 
 Tek satırda da olur:

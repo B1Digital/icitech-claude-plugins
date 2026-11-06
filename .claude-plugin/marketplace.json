@@ -24,6 +24,11 @@
       "name": "ici-internal-documents",
       "source": "./plugins/ici-internal-documents",
       "description": "icitech şablonunda Türkçe teknik doküman (PDF): kapak, İçindekiler, tablolar, akış şemaları, sade yazım"
+    },
+    {
+      "name": "ici-store-guard",
+      "source": "./plugins/ici-store-guard",
+      "description": "App Store ve Google Play'e göndermeden önce ret denetimi: kod, derlenmiş paket, mağaza görselleri ve simülatörde reviewer testi; tek GO / NO-GO raporu"
     }
   ]
 }
