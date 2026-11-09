@@ -95,7 +95,21 @@ bundletool if present) — never run third-party scripts.
    (`kaynak: scanner, apple, google`) — agreement across sources raises confidence.
 3. **Verify** every CRITICAL and IMPORTANT by reading the cited lines (parallel
    reads). Confirm / downgrade (say why) / drop. Report the dropped count in one line.
-4. Normalise levels: **BLOCK** (will be rejected / update blocked),
+4. **Cross-platform parity** (cross-platform apps; checks no single-store auditor makes):
+   - *Declaration drift* — every data-collecting SDK in `pubspec.yaml`/`package.json` is
+     declared on **both** the iOS App Privacy answers and the Play Data safety form,
+     with the same linked/tracking stance (e.g. `fastlane/app_privacy_details.json` vs.
+     the Data safety list you derive). A one-sided declaration is RISK.
+   - *Behavioural drift* — grep `kReleaseMode`, `kDebugMode`, `__DEV__`,
+     `Platform.isIOS/isAndroid`, `defaultTargetPlatform`: does release build or one
+     platform change ads, prices, paywalls, permissions or features? Anything that only
+     appears in release, or only on one store, must be in that store's review notes.
+   - *Deep-link parity* — if the app uses deep links: iOS associated domains
+     (`Runner.entitlements`, `apple-app-site-association`) vs. Android
+     `intent-filter autoVerify` + `assetlinks.json`; one working and one not is RISK.
+   - *Parity matrix* — in the report, a short table: feature / permission / IAP /
+     login / ads × iOS × Android, flagging anything present on only one side.
+5. Normalise levels: **BLOCK** (will be rejected / update blocked),
    **RISK** (likely rejection, reviewer-dependent), **ÖNERİ** (best practice),
    **MANUEL** (lives in App Store Connect / Play Console, cannot be seen in code).
 
@@ -108,6 +122,20 @@ simulator first (reviewers use iPads), fresh install. Runtime results also
 **confirm or refute** static RISK items — update their level (e.g. "ATT prompt may not
 show" → refuted if it showed on a fresh install). Failures become findings with a
 screenshot path instead of `file:line`.
+
+**Optional tools — use them when present, never require them:**
+
+| Tool | How to detect | What it adds |
+|---|---|---|
+| **Maestro** (`maestro` CLI / `maestro` MCP server) | `which maestro`, or `mcp__maestro__*` tools | Drives iOS sim **and Android emulator** by accessibility labels instead of pixel coordinates; writes a repeatable reviewer flow. See `references/maestro-reviewer-flow.md`. |
+| **Dart & Flutter MCP** (`dart mcp-server`, tools `mcp__dart__*`) | `mcp__dart__get_runtime_errors` available | During the walkthrough, `launch_app` / `dtd` connect + `get_runtime_errors` catch Flutter errors that do not crash (RenderFlex overflow, null errors) but leave blank or broken widgets a reviewer reports under 2.1. Also `analyze_files` for a quick analyzer pass. |
+| Built-in iOS Simulator tool | `mcp__Claude_Code_iOS_Simulator__control` | Live panel the user can watch; screenshots. Fallback driver when Maestro is absent. |
+
+With Maestro available, run the walkthrough on **both** an iPad simulator and an
+Android emulator (`maestro list-devices`; boot one with `emulator -avd <name>` if none
+is running). Without it, iOS only — say so under "Çalışmayan denetimler".
+Always target devices by explicit id (`--device`, `adb -s`): a physical phone may also
+be connected, and installing or running flows on it is not part of an audit.
 
 ## Phase 5 — Report
 

@@ -11,8 +11,8 @@ Apple'ın 2025 şeffaflık raporuna göre retlerin yaklaşık üçte ikisi Guide
 | 1. Tarayıcı | [store-compliance](https://github.com/motivexintelligence/store-compliance-skill): SDK'lar, izinler, targetSdk, Billing, privacy manifest (2026 kuralları) |
 | 2. Paralel denetim | [appstore-review / playstore-review](https://github.com/devsemih/appstore-review-skill) ve Google'ın resmi [play-policy-insights](https://github.com/android/skills/tree/main/play/play-policy-insights) aracı |
 | 2b. Paket ve görseller | IPA/AAB içindeki Info.plist, entitlement, privacy manifest, ikon, ad ID'leri; mağaza ekran görüntüleri gerçek fiyat/arayüzü gösteriyor mu, dil uyumu |
-| 3. Birleştirme | Tekrarları ayıklar, her bulguyu `dosya:satır` okuyarak doğrular |
-| 4. Runtime | iPad simülatöründe temiz kurulum, ATT/izinler, her sekme, mağaza, geri yükleme, gizlilik linki, dark mode |
+| 3. Birleştirme | Tekrarları ayıklar, her bulguyu `dosya:satır` okuyarak doğrular; iOS/Android beyan, davranış ve deep link tutarlılığı |
+| 4. Runtime | iPad simülatöründe (Maestro varsa Android emülatöründe de) temiz kurulum, ATT/izinler, her sekme, mağaza, geri yükleme, gizlilik linki, dark mode |
 | 5. Rapor | Tek dosya: **GO / NO-GO**, BLOCK / RISK / ÖNERİ / MANUEL, konsol kontrol listesi, App Review Notes taslağı |
 
 Denetlenen repoya hiçbir şey yazmaz. Kod değişikliği sadece istenirse yapılır.
@@ -25,6 +25,10 @@ Denetlenen repoya hiçbir şey yazmaz. Kod değişikliği sadece istenirse yapı
 ```
 
 Gereken: Python 3. iOS runtime testi için Xcode simülatörü, Android paket kontrolü için tercihen `bundletool`.
+
+Opsiyonel (kuruluysa kullanılır):
+- [Maestro](https://github.com/mobile-dev-inc/Maestro): iOS simülatörü ve Android emülatöründe tekrar çalıştırılabilir reviewer akışı. Kurulum: `brew install mobile-dev-inc/tap/maestro`, sonra `claude mcp add --scope user maestro -- maestro mcp`.
+- [Dart & Flutter MCP](https://github.com/dart-lang/ai/tree/main/pkgs/dart_mcp_server): çökme olmadan görünen Flutter hatalarını yakalar. Kurulum: `claude mcp add --scope user dart -- dart mcp-server --enable flutter_app_lifecycle`.
 
 ## Kullanım
 
