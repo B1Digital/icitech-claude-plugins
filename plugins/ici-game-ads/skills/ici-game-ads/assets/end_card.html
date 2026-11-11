@@ -1,0 +1,76 @@
+<!doctype html>
+<meta charset="utf-8">
+<style>
+  * { margin: 0; box-sizing: border-box; }
+  html, body { width: 100vw; height: 100vh; overflow: hidden; font-family: Brand, "Arial Rounded MT Bold", "Helvetica Neue", Arial, sans-serif; font-weight: 700; }
+  #card { position: relative; width: 100%; height: 100%; }
+  .outlined { paint-order: stroke fill; letter-spacing: 1px; line-height: 1; }
+  #icon { position: absolute; object-fit: cover; }
+  #name, #tagline, #cta, #mascot { position: absolute; }
+  #tagline { color: #fff; }
+  #cta { color: #fff; }
+
+  /* portrait 1080x1920 */
+  .port #icon { left: 50%; margin-left: -280px; top: 250px; width: 560px; height: 560px; border-radius: 124px; }
+  .port #name { top: 880px; width: 100%; text-align: center; font-size: 190px; }
+  .port #tagline { top: 1120px; width: 100%; text-align: center; font-size: 64px; }
+  .port #cta { top: 1330px; width: 100%; text-align: center; font-size: 130px; }
+  .port #mascot { left: 50%; margin-left: -135px; bottom: 50px; width: 270px; }
+
+  /* landscape 1920x1080 */
+  .land #icon { left: 230px; top: 270px; width: 540px; height: 540px; border-radius: 120px; }
+  .land #name { left: 880px; top: 230px; font-size: 190px; }
+  .land #tagline { left: 890px; top: 480px; font-size: 64px; }
+  .land #cta { left: 880px; top: 620px; font-size: 130px; }
+  .land #mascot { right: 70px; bottom: 40px; width: 270px; }
+
+  /* square 1080x1080 */
+  .sq #icon { left: 50%; margin-left: -190px; top: 70px; width: 380px; height: 380px; border-radius: 86px; }
+  .sq #name { top: 480px; width: 100%; text-align: center; font-size: 150px; }
+  .sq #tagline { top: 672px; width: 100%; text-align: center; font-size: 52px; }
+  .sq #cta { top: 790px; width: 100%; text-align: center; font-size: 112px; }
+  .sq #mascot { right: 24px; bottom: 24px; width: 170px; }
+</style>
+<div id="card">
+  <img id="icon">
+  <div id="name" class="outlined"></div>
+  <div id="tagline"></div>
+  <div id="cta" class="outlined"></div>
+  <img id="mascot">
+</div>
+<script>
+  // The script replaces __PARAMS__ with a JSON object before rendering.
+  var p = __PARAMS__;
+  var card = document.getElementById('card');
+  card.className = p.layout;
+  var centerY = p.layout === 'land' ? '50%' : '37%';
+  card.style.background =
+    'repeating-conic-gradient(from 0deg at 50% ' + centerY + ', rgba(255,255,255,.07) 0 9deg, transparent 9deg 18deg),' +
+    'radial-gradient(circle at 50% ' + centerY + ', ' + p.bg_inner + ' 0, ' + p.bg_mid + ' 45%, ' + p.bg_outer + ' 100%)';
+  if (p.font) {
+    var face = document.createElement('style');
+    face.textContent = '@font-face{font-family:Brand;src:url("' + p.font + '")}';
+    document.head.appendChild(face);
+  }
+  function text(id, value) { document.getElementById(id).textContent = value || ''; }
+  function image(id, url) { var el = document.getElementById(id); if (url) { el.src = url; } else { el.remove(); } }
+  text('name', p.name); text('tagline', p.tagline); text('cta', p.cta);
+  image('icon', p.icon); image('mascot', p.mascot);
+  var stroke = (p.layout === 'sq' ? 12 : 14) + 'px ' + p.stroke;
+  // Not named "name": at global scope that would be window.name, which only holds strings.
+  var nameEl = document.getElementById('name'), ctaEl = document.getElementById('cta');
+  nameEl.style.color = p.title; nameEl.style.webkitTextStroke = stroke; nameEl.style.textShadow = '0 10px 0 rgba(0,0,0,.35)';
+  ctaEl.style.webkitTextStroke = stroke; ctaEl.style.textShadow = '0 10px 0 rgba(0,0,0,.35)';
+  document.getElementById('tagline').style.textShadow = '0 5px 0 rgba(0,0,0,.4)';
+  // Keep the name and the call to action on one line: shrink the font until it fits.
+  [nameEl, ctaEl].forEach(function (el) {
+    el.style.whiteSpace = 'nowrap';
+    var room = p.layout === 'land' ? window.innerWidth - el.offsetLeft - 60 : window.innerWidth - 80;
+    var size = parseFloat(getComputedStyle(el).fontSize);
+    el.style.width = 'auto';
+    while (el.scrollWidth > room && size > 40) { size -= 4; el.style.fontSize = size + 'px'; }
+    if (p.layout !== 'land') { el.style.width = '100%'; }
+  });
+  var icon = document.getElementById('icon');
+  if (icon) { icon.style.boxShadow = '0 30px 60px rgba(0,0,0,.45), 0 0 0 10px ' + p.title; }
+</script>
